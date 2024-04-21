@@ -19,7 +19,11 @@ class UnifiedSFTDataset(Dataset):
         logger.info('Loading data: {}'.format(file))
         with open(file, 'r', encoding='utf8') as f:
             data_list = f.readlines()
-        logger.info(f'Use template "{self.template_name}" for training')
+        #logger.info(f'Use template "{self.template_name}" for training')
+        if 'eval' in file:
+            logger.info(f'Use template "{self.template_name}" for evaluation')
+        else:
+            logger.info(f'Use template "{self.template_name}" for training')
         logger.info("There are {} data in dataset".format(len(data_list)))
         self.data_list = data_list
 

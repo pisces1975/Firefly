@@ -281,7 +281,7 @@ def load_model(args, training_args):
     if args.train_mode in ['lora', 'qlora'] and args.task_type in ['pretrain', 'sft']:
         model = get_peft_model(model, peft_config)
         logger.info(f'memory footprint of model: {model.get_memory_footprint() / (1024 * 1024 * 1024)} GB')
-        model.print_trainable_parameters()
+        # model.print_trainable_parameters()
 
     # init ref_model
     if args.task_type == 'dpo':
@@ -301,7 +301,7 @@ def load_model(args, training_args):
     }
 
 
-def load_sft_dataset(args, tokenizer):
+def load_sft_dataset(args, tokenizer, mode='train'):
     if args.template_name not in template_dict.keys():
         raise Exception(f"template_name doesn't exist, all template_name: {template_dict.keys()}")
     template = template_dict[args.template_name]
@@ -313,7 +313,10 @@ def load_sft_dataset(args, tokenizer):
         train_dataset = ChatGLM3SFTDataset(args.train_file, tokenizer, args.max_seq_length, template)
     else:
         logger.info('Loading data with UnifiedSFTDataset')
-        train_dataset = UnifiedSFTDataset(args.train_file, tokenizer, args.max_seq_length, template)
+        if mode=='train':
+            train_dataset = UnifiedSFTDataset(args.train_file, tokenizer, args.max_seq_length, template)
+        else:
+            train_dataset = UnifiedSFTDataset(args.eval_file, tokenizer, args.max_seq_length, template)
     return train_dataset
 
 
@@ -340,6 +343,7 @@ def init_components(args, training_args):
     ref_model = components['ref_model']
     peft_config = components['peft_config']
 
+    eval_dataset = None
     # 初始化dataset和collator
     if args.task_type == 'pretrain':
         logger.info('Train model with pretrain task')
@@ -348,6 +352,7 @@ def init_components(args, training_args):
     elif args.task_type == 'sft':
         logger.info('Train model with sft task')
         train_dataset = load_sft_dataset(args, tokenizer)
+        eval_dataset = load_sft_dataset(args, tokenizer, mode='eval')
         data_collator = SFTDataCollator(tokenizer, args.max_seq_length)
     else:
         logger.info('Train model with dpo task')
@@ -372,6 +377,7 @@ def init_components(args, training_args):
             model=model,
             args=training_args,
             train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
             tokenizer=tokenizer,
             data_collator=data_collator,
         )
@@ -393,6 +399,8 @@ def main():
     metrics = train_result.metrics
     trainer.log_metrics("train", metrics)
     trainer.save_metrics("train", metrics)
+    trainer.log_metrics("eval", metrics)
+    trainer.save_metrics("eval", metrics)
     trainer.save_state()
 
 
